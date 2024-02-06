@@ -1,98 +1,122 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-void main() {
-  runApp(MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final cameras = await availableCameras();
+  runApp(MyApp(cameras: cameras));
 }
 
 class MyApp extends StatelessWidget {
+  final List<CameraDescription> cameras;
+
+  const MyApp({Key? key, required this.cameras}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Camera Demo',
+      title: 'Camera in WebView',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: HomeScreen(),
+      home: HomeScreen(cameras: cameras),
     );
   }
 }
 
 class HomeScreen extends StatelessWidget {
+  final List<CameraDescription> cameras;
+
+  const HomeScreen({Key? key, required this.cameras}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Flutter Camera Demo'),
+        title: Text('Camera in WebView'),
       ),
       body: Center(
         child: ElevatedButton(
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => CameraScreen()),
+              MaterialPageRoute(
+                builder: (context) => WebViewWithCamera(cameras: cameras),
+              ),
             );
           },
-          child: Text('Open Camera'),
+          child: Text('Open WebView with Camera'),
         ),
       ),
     );
   }
 }
 
-class CameraScreen extends StatefulWidget {
+class WebViewWithCamera extends StatefulWidget {
+  final List<CameraDescription> cameras;
+
+  const WebViewWithCamera({Key? key, required this.cameras}) : super(key: key);
+
   @override
-  _CameraScreenState createState() => _CameraScreenState();
+  _WebViewWithCameraState createState() => _WebViewWithCameraState();
 }
 
-class _CameraScreenState extends State<CameraScreen> {
-  late CameraController _controller;
-  late Future<void> _initializeControllerFuture;
-
+class _WebViewWithCameraState extends State<WebViewWithCamera> {
   @override
   void initState() {
     super.initState();
-
-    // Initialize the camera controller
-    _initializeCamera();
   }
 
-  Future<void> _initializeCamera() async {
-    try {
-      // Get the list of available cameras
-      List<CameraDescription> cameras = await availableCameras();
+  final GlobalKey webViewKey = GlobalKey();
 
-      if (cameras.isNotEmpty) {
-        // Use the first camera
-        _controller = CameraController(cameras[0], ResolutionPreset.medium);
-
-        // Initialize the controller
-        _initializeControllerFuture = _controller.initialize();
-
-        // setState to trigger a rebuild with the camera preview
-        setState(() {});
-      } else {
-        print('No cameras available');
-      }
-    } catch (e) {
-      print('Error initializing camera: $e');
-    }
-  }
-
+  InAppWebViewController? webViewController;
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Camera')),
-      body: FutureBuilder<void>(
-        future: _initializeControllerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            // If the Future is complete, display the camera preview
-            return CameraPreview(_controller);
-          } else {
-            // Otherwise, display a loading indicator
-            return Center(child: CircularProgressIndicator());
+      appBar: AppBar(title: Text('WebView with Camera')),
+      body: InAppWebView(
+        key: webViewKey,
+        initialUrlRequest: URLRequest(
+            url: WebUri(
+                "https://platform.onmeta.in/kyc/?apiKey=6af803df-0e0e-4708-805f-87baa8653e97&userEmail=chetan.j@antino.com")),
+        initialSettings: InAppWebViewSettings(
+          mediaPlaybackRequiresUserGesture: false,
+          allowsInlineMediaPlayback: true,
+        ),
+        onWebViewCreated: (controller) {
+          webViewController = controller;
+        },
+        onPermissionRequest: (controller, request) async {
+          final resources = <PermissionResourceType>[];
+          if (request.resources.contains(PermissionResourceType.CAMERA)) {
+            final cameraStatus = await Permission.camera.request();
+            if (!cameraStatus.isDenied) {
+              resources.add(PermissionResourceType.CAMERA);
+            }
           }
+          if (request.resources.contains(PermissionResourceType.MICROPHONE)) {
+            final microphoneStatus = await Permission.microphone.request();
+            if (!microphoneStatus.isDenied) {
+              resources.add(PermissionResourceType.MICROPHONE);
+            }
+          }
+          // only for iOS and macOS
+          if (request.resources
+              .contains(PermissionResourceType.CAMERA_AND_MICROPHONE)) {
+            final cameraStatus = await Permission.camera.request();
+            final microphoneStatus = await Permission.microphone.request();
+            if (!cameraStatus.isDenied && !microphoneStatus.isDenied) {
+              resources.add(PermissionResourceType.CAMERA_AND_MICROPHONE);
+            }
+          }
+
+          return PermissionResponse(
+              resources: resources,
+              action: resources.isEmpty
+                  ? PermissionResponseAction.DENY
+                  : PermissionResponseAction.GRANT);
         },
       ),
     );
@@ -100,8 +124,6 @@ class _CameraScreenState extends State<CameraScreen> {
 
   @override
   void dispose() {
-    // Dispose of the camera controller when the widget is disposed
-    _controller.dispose();
     super.dispose();
   }
 }
