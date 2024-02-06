@@ -1,35 +1,107 @@
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:camera/camera.dart';
 
-void main() => runApp(MyApp());
+void main() {
+  runApp(MyApp());
+}
 
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: MyWebView(),
+      title: 'Flutter Camera Demo',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: HomeScreen(),
     );
   }
 }
 
-class MyWebView extends StatefulWidget {
-  @override
-  _MyWebViewState createState() => _MyWebViewState();
-}
-
-class _MyWebViewState extends State<MyWebView> {
+class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Onmeta Production'),
+        title: Text('Flutter Camera Demo'),
       ),
-      body: WebView(
-        initialUrl:
-            'https://platform.onmeta.in/?apiKey=6af803df-0e0e-4708-805f-87baa8653e97', // Set the initial URL here
-        javascriptMode: JavascriptMode.unrestricted, // Enable JavaScript
+      body: Center(
+        child: ElevatedButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => CameraScreen()),
+            );
+          },
+          child: Text('Open Camera'),
+        ),
       ),
     );
   }
 }
-            // 'https://p2xvk012-3000.inc1.devtunnels.ms/?apiKey=6af803df-0e0e-4708-805f-87baa8653e97', // Set the initial URL here
+
+class CameraScreen extends StatefulWidget {
+  @override
+  _CameraScreenState createState() => _CameraScreenState();
+}
+
+class _CameraScreenState extends State<CameraScreen> {
+  late CameraController _controller;
+  late Future<void> _initializeControllerFuture;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Initialize the camera controller
+    _initializeCamera();
+  }
+
+  Future<void> _initializeCamera() async {
+    try {
+      // Get the list of available cameras
+      List<CameraDescription> cameras = await availableCameras();
+
+      if (cameras.isNotEmpty) {
+        // Use the first camera
+        _controller = CameraController(cameras[0], ResolutionPreset.medium);
+
+        // Initialize the controller
+        _initializeControllerFuture = _controller.initialize();
+
+        // setState to trigger a rebuild with the camera preview
+        setState(() {});
+      } else {
+        print('No cameras available');
+      }
+    } catch (e) {
+      print('Error initializing camera: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Camera')),
+      body: FutureBuilder<void>(
+        future: _initializeControllerFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.done) {
+            // If the Future is complete, display the camera preview
+            return CameraPreview(_controller);
+          } else {
+            // Otherwise, display a loading indicator
+            return Center(child: CircularProgressIndicator());
+          }
+        },
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    // Dispose of the camera controller when the widget is disposed
+    _controller.dispose();
+    super.dispose();
+  }
+}

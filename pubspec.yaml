@@ -10,6 +10,8 @@ dependencies:
   flutter:
     sdk: flutter
   webview_flutter: ^2.0.13
+  permission_handler: ^11.2.0
+  camera: ^0.10.5+9
 
 dev_dependencies:
   flutter_test:
